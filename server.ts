@@ -17,6 +17,8 @@ const LINEMODE = 34;
 const MODE = 1; // Mode sub-option
 const NAWS = 31; // Negotiate About Window Size
 
+const INACTIVITY_TIMEOUT = 30000; // 30 seconds
+
 let userCounter = 0;
 const gridSize = 1024;
 const globalGrid = new Uint8Array(gridSize * gridSize);
@@ -47,6 +49,7 @@ interface User {
   lastRenderTime: number;
   renderTimer: NodeJS.Timeout | null;
   events: EventEmitter;
+  inactivityTimer: NodeJS.Timeout | null;
 }
 
 const users: User[] = [];
@@ -71,6 +74,19 @@ function handleNAWS(data: number[], user: User) {
     user.height = (data[2] << 8) + data[3];
     //scheduleRender(user);
   }
+}
+
+function resetInactivityTimer(user: User) {
+  if (user.inactivityTimer) {
+    clearTimeout(user.inactivityTimer);
+  }
+  user.inactivityTimer = setTimeout(() => {
+    console.log(`${user.id} disconnected due to inactivity.`);
+    user.socket.write("\x1b[?1003;1006;1015l"); // Disable all mouse tracking
+    user.socket.write("\x1b[H");
+    user.socket.write("30s of inactivity, bye bye! " + "\x1b[?25h");
+    user.socket.end();
+  }, INACTIVITY_TIMEOUT);
 }
 
 // Character mapping
@@ -106,7 +122,7 @@ const renderScreen = (user: User) => {
   user.socket.write("\x1b[H"); // Move cursor to the top-left corner
   user.socket.write(screenString + "\x1b[?25l"); // Hide the cursor
   user.socket.write("\x1b[H");
-  user.socket.write("you can draw! (ctrl + ], ctrl + c to exit)" + "\x1b[?25l");
+  user.socket.write("you can draw! (hit 'q' to exit)" + "\x1b[?25l");
 };
 
 const scheduleRender = (user: User) => {
@@ -340,7 +356,10 @@ const handleSocket = async (socket: Socket) => {
     lastRenderTime: 0,
     renderTimer: null,
     events: new EventEmitter(),
+    inactivityTimer: null,
   };
+
+  resetInactivityTimer(user);
 
   user.events.on("scroll", (ev) => {
     if (ev.button === 0) {
@@ -389,6 +408,7 @@ const handleSocket = async (socket: Socket) => {
   let inNegotiation = false;
 
   socket.on("data", (data: Buffer) => {
+    resetInactivityTimer(user);
     const telnetEvent = parseTelnetNegotiation(data);
     if (telnetEvent.length) {
       telnetEvent.forEach((command) => {
@@ -420,8 +440,15 @@ const handleSocket = async (socket: Socket) => {
       return;
     }
     const keyEvent = parseKeyInput(data);
-    if (keyEvent.type === "arrow") {
+    if (keyEvent?.type === "arrow") {
       user.events.emit("arrowkey", keyEvent);
+    }
+    if (keyEvent?.key === "q") {
+      console.log(`${user.id} disconnected due to 'q' key press.`);
+      user.socket.write("\x1b[?1003;1006;1015l"); // Disable all mouse tracking
+      user.socket.write("\x1b[H");
+      user.socket.write("you hit 'q', bye bye! " + "\x1b[?25h");
+      user.socket.end();
     }
     return;
   });
@@ -440,7 +467,7 @@ function broadcastRender() {
 
 const startServer = async () => {
   const server = createServer(handleSocket);
-  const port = process.env.PORT || 23;
+  const port = parseInt(process.env.PORT) || 23;
 
   server.listen(port, () => {
     console.log(`Telnet server listening on port ${port}`);
