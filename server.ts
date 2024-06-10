@@ -50,6 +50,7 @@ interface User {
   renderTimer: NodeJS.Timeout | null;
   events: EventEmitter;
   inactivityTimer: NodeJS.Timeout | null;
+  previousRender: string;
 }
 
 const users: User[] = [];
@@ -119,10 +120,39 @@ function renderGridForUser(user: User): string {
 
 const renderScreen = (user: User) => {
   const screenString = renderGridForUser(user);
-  user.socket.write("\x1b[H"); // Move cursor to the top-left corner
-  user.socket.write(screenString + "\x1b[?25l"); // Hide the cursor
+  const currentRender = [];
+
+  for (let i = 0; i < screenString.length; i += user.width) {
+    currentRender.push(screenString.slice(i, i + user.width));
+  }
+
+  if (
+    !user.previousRender ||
+    user.previousRender.length !== screenString.length
+  ) {
+    // Fallback to sending the entire frame if the length has changed
+    user.socket.write("\x1b[H"); // Move cursor to the top-left corner
+    user.socket.write(screenString + "\x1b[?25l"); // Hide the cursor
+  } else {
+    // Calculate and send deltas
+    const previousLines = [];
+    for (let i = 0; i < user.previousRender.length; i += user.width) {
+      previousLines.push(user.previousRender.slice(i, i + user.width));
+    }
+
+    currentRender.forEach((line, index) => {
+      if (previousLines[index] !== line) {
+        user.socket.write(`\x1b[${index + 1};1H`); // Move cursor to the line
+        user.socket.write(line);
+      }
+    });
+  }
+
   user.socket.write("\x1b[H");
   user.socket.write("you can draw! (hit 'q' to exit)" + "\x1b[?25l");
+
+  // Update previous render
+  user.previousRender = screenString;
 };
 
 const scheduleRender = (user: User) => {
@@ -357,6 +387,7 @@ const handleSocket = async (socket: Socket) => {
     renderTimer: null,
     events: new EventEmitter(),
     inactivityTimer: null,
+    previousRender: "",
   };
 
   resetInactivityTimer(user);
