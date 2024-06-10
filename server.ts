@@ -17,8 +17,9 @@ const LINEMODE = 34;
 const MODE = 1; // Mode sub-option
 const NAWS = 31; // Negotiate About Window Size
 
-const INACTIVITY_TIMEOUT = 10000; // 10 seconds
-const MAX_USERS = 100;
+// 10 seconds
+const INACTIVITY_TIMEOUT = parseInt(process.env.INACTIVITY_TIMEOUT) || 10000;
+const MAX_USERS = parseInt(process.env.MAX_USERS) || 100;
 
 let userCounter = 0;
 const gridSize = 1024;
