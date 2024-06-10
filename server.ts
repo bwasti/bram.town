@@ -415,7 +415,7 @@ const handleSocket = async (socket: Socket) => {
     user.cursor_y = y;
     broadcastRender();
   });
-  user.events.on("mousedrag", (ev) => {
+  const drawEvent = (ev) => {
     const x = user.x + ev.x;
     const y = user.y + ev.y;
     const newVal = globalGrid[y * gridSize + x] + (ev.shift ? -1 : 1);
@@ -424,7 +424,10 @@ const handleSocket = async (socket: Socket) => {
       0,
     );
     broadcastRender();
-  });
+  };
+  user.events.on("mousedrag", drawEvent);
+  user.events.on("mouseclick", drawEvent);
+
   user.events.on("arrowkey", (ev) => {
     if (ev.key === "up") {
       user.y = Math.max(user.y - 1, 0);
@@ -433,6 +436,23 @@ const handleSocket = async (socket: Socket) => {
     } else if (ev.key === "left") {
       user.x = Math.max(user.x - 2, 0);
     } else if (ev.key === "right") {
+      user.x = Math.min(user.x + 2, gridSize);
+    }
+    broadcastRender();
+  });
+
+  user.events.on("keypress", (ev) => {
+    if (ev.key === "q") {
+      console.log(`${user.id} disconnected due to 'q' key press.`);
+      killUser(user, "you hit 'q'.");
+    }
+    if (ev.key === "w") {
+      user.y = Math.max(user.y - 1, 0);
+    } else if (ev.key === "s") {
+      user.y = Math.min(user.y + 1, gridSize);
+    } else if (ev.key === "a") {
+      user.x = Math.max(user.x - 2, 0);
+    } else if (ev.key === "d") {
       user.x = Math.min(user.x + 2, gridSize);
     }
     broadcastRender();
@@ -482,9 +502,8 @@ const handleSocket = async (socket: Socket) => {
     if (keyEvent?.type === "arrow") {
       user.events.emit("arrowkey", keyEvent);
     }
-    if (keyEvent?.key === "q") {
-      console.log(`${user.id} disconnected due to 'q' key press.`);
-      killUser(user, "you hit 'q'.");
+    if (keyEvent?.type === "character") {
+      user.events.emit("keypress", keyEvent);
     }
     return;
   });
