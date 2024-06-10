@@ -17,7 +17,8 @@ const LINEMODE = 34;
 const MODE = 1; // Mode sub-option
 const NAWS = 31; // Negotiate About Window Size
 
-const INACTIVITY_TIMEOUT = 30000; // 30 seconds
+const INACTIVITY_TIMEOUT = 10000; // 10 seconds
+const MAX_USERS = 100;
 
 let userCounter = 0;
 const gridSize = 1024;
@@ -83,10 +84,7 @@ function resetInactivityTimer(user: User) {
   }
   user.inactivityTimer = setTimeout(() => {
     console.log(`${user.id} disconnected due to inactivity.`);
-    user.socket.write("\x1b[?1003;1006;1015l"); // Disable all mouse tracking
-    user.socket.write("\x1b[H");
-    user.socket.write("30s of inactivity, bye bye! " + "\x1b[?25h");
-    user.socket.end();
+    killUser(user, "disconnected due to inactivity.");
   }, INACTIVITY_TIMEOUT);
 }
 
@@ -305,6 +303,13 @@ interface TelnetCommand {
   data?: number[];
 }
 
+function killUser(user: User, msg: string) {
+  user.socket.write("\x1b[?1003;1006;1015l"); // Disable all mouse tracking
+  user.socket.write("\x1b[H");
+  user.socket.write(msg + " bye! " + "\x1b[?25h");
+  user.socket.end();
+}
+
 function parseTelnetNegotiation(buffer: number[]): TelnetCommand[] {
   const commands: TelnetCommand[] = [];
   let i = 0;
@@ -390,6 +395,9 @@ const handleSocket = async (socket: Socket) => {
     previousRender: "",
   };
 
+  if (users.length >= MAX_USERS) {
+    killUser(user, "too many users connected, please try again later.");
+  }
   resetInactivityTimer(user);
 
   user.events.on("scroll", (ev) => {
@@ -476,10 +484,7 @@ const handleSocket = async (socket: Socket) => {
     }
     if (keyEvent?.key === "q") {
       console.log(`${user.id} disconnected due to 'q' key press.`);
-      user.socket.write("\x1b[?1003;1006;1015l"); // Disable all mouse tracking
-      user.socket.write("\x1b[H");
-      user.socket.write("you hit 'q', bye bye! " + "\x1b[?25h");
-      user.socket.end();
+      killUser(user, "you hit 'q'.");
     }
     return;
   });
