@@ -309,7 +309,9 @@ function killUser(user: User, msg: string) {
   user.socket.write("\x1b[H");
   user.socket.write(msg + " bye! " + "\x1b[?25h");
   user.socket.end();
-  users.splice(users.indexOf(user), 1);
+  if (users.indexOf(user) > -1) {
+    users.splice(users.indexOf(user), 1);
+  }
 }
 
 function parseTelnetNegotiation(buffer: number[]): TelnetCommand[] {
@@ -511,8 +513,7 @@ const handleSocket = async (socket: Socket) => {
   });
 
   socket.on("end", () => {
-    console.log(`${user.id} disconnected. ${users.length - 1} total.`);
-    users.splice(users.indexOf(user), 1);
+    console.log(`${user.id} disconnected. ${users.length} total.`);
   });
 };
 
