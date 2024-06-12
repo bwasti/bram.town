@@ -309,6 +309,7 @@ function killUser(user: User, msg: string) {
   user.socket.write("\x1b[H");
   user.socket.write(msg + " bye! " + "\x1b[?25h");
   user.socket.end();
+  users.splice(users.indexOf(user), 1);
 }
 
 function parseTelnetNegotiation(buffer: number[]): TelnetCommand[] {
